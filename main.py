@@ -1,9 +1,27 @@
 import json, os, subprocess
+from wcwidth import wcswidth
 
 CONFIG = os.path.expanduser("~/.universal_tv_remotes.json")
 BRANDS = ["LG", "Samsung", "Sony", "Philips", "Panasonic", "Toshiba"]
-# Fixed terminal width for Termux. Keeps the UI from wrapping at the screen edge.
-WIDTH = 83
+WIDTH = 60
+INNER = WIDTH - 4
+
+
+def display_width(text):
+    width = wcswidth(str(text))
+    return max(width, 0)
+
+
+def fit_row(text, width=INNER):
+    text = str(text)
+    if display_width(text) > width:
+        out = ""
+        for char in text:
+            if display_width(out + char) > width:
+                break
+            out += char
+        text = out
+    return text + " " * max(0, width - display_width(text))
 
 
 def load_tvs():
@@ -29,10 +47,10 @@ def pause():
 
 def box(title, rows=()):
     print("╔" + "═" * (WIDTH - 2) + "╗")
-    print("║ " + title[:WIDTH - 4].center(WIDTH - 4) + " ║")
+    print("║ " + fit_row(title.center(INNER)) + " ║")
     print("╠" + "═" * (WIDTH - 2) + "╣")
     for row in rows:
-        print("║ " + str(row)[:WIDTH - 4].ljust(WIDTH - 4) + " ║")
+        print("║ " + fit_row(row) + " ║")
     print("╚" + "═" * (WIDTH - 2) + "╝")
 
 
@@ -157,7 +175,7 @@ def remove_tv():
         pause()
         return
     clear()
-    box("🗑️ REMOVE TV", [*(f"{i}. {tv['name']} [{tv.get('brand', '?')}]" for i, tv in enumerate(tvs, 1)), "0. Cancel"])
+    box("🗑️ REMOVE TV", [*(f"{i}. 📺 {tv['name']} [{tv.get('brand', '?')}]" for i, tv in enumerate(tvs, 1)), "0. Cancel"])
     choice = input("\nSelect TV: ").strip()
     if choice == "0":
         return
@@ -179,8 +197,7 @@ def select_tv():
     clear()
     rows = []
     for i, tv in enumerate(tvs, 1):
-        rows += [f"{i}. 📺 {tv['name']} [{tv.get('brand', '?')}]"]
-        rows += [f"   🌐 {tv['ip']}"]
+        rows += [f"{i}. 📺 {tv['name']} [{tv.get('brand', '?')}]", f"   {tv['ip']}"]
     rows.append("0. ↩️ Back")
     box("📺 SELECT TV", rows)
     choice = input("\nSelect TV: ").strip()
@@ -224,43 +241,71 @@ def control_tv(tv):
 
 
 def navigation(ip):
-    actions = {"w": "up", "s": "down", "a": "left", "d": "right", "ok": "ok", "b": "back"}
     while True:
         clear()
         box("🎮 NAVIGATION", [
+            "            ▲",
+            "           [W]",
             "",
-            "              ▲",
-            "             [W]",
+            "      [A] [OK] [D]",
             "",
-            "        [A] [OK] [D]",
+            "            ▼",
+            "           [S]",
             "",
-            "              ▼",
-            "             [S]",
-            "",
-            "H  🏠 Home    B  ↩️ Back    Q  ↩️ Back",
+            "H. 🏠 Home",
+            "B. ↩️ Back",
+            "0. Back",
         ])
-        choice = input("\nCommand: ").lower().strip()
-        if choice == "q": return
+        choice = input("\nSelect: ").lower().strip()
+        actions = {"w": "up", "s": "down", "a": "left", "d": "right", "ok": "ok", "b": "back"}
+        if choice == "0": return
         if choice == "h": run_lgtv(ip, "launch", "com.webos.app.home")
         elif choice in actions: run_lgtv(ip, "nav", actions[choice])
-        else: print("❌ Unknown command.")
+        else: print("❌ Unknown command."); pause()
 
 
 def power(ip):
-    actions = {"1": ("on",), "2": ("off",), "3": ("power",), "4": ("power-status",), "5": ("screen-off",), "6": ("screen-on",)}
+    actions = {
+        "1": ("on",), "2": ("off",), "3": ("power",),
+        "4": ("power-status",), "5": ("screen-off",), "6": ("screen-on",)
+    }
     while True:
-        print("\n1 Turn On  2 Turn Off  3 Toggle  4 Status  5 Screen Off  6 Screen On  0 Back")
-        choice = input("> ").strip()
+        clear()
+        box("⏻ POWER", [
+            "1. 🟢 Turn ON",
+            "2. 🔴 Turn OFF",
+            "3. 🔄 Toggle Power",
+            "4. 🔍 Power Status",
+            "5. 🌑 Screen OFF",
+            "6. 💡 Screen ON",
+            "",
+            "0. Back",
+        ])
+        choice = input("\nSelect: ").strip()
         if choice == "0": return
         if choice in actions:
-            run_lgtv(ip, *actions[choice]); pause()
-        else: print("❌ Invalid.")
+            run_lgtv(ip, *actions[choice])
+            pause()
+        else:
+            print("❌ Invalid option.")
+            pause()
 
 
 def audio(ip):
     while True:
-        print("\n1 Volume+  2 Volume-  3 Mute  4 Unmute  5 Set Volume  6 Sound Mode  7 Output  0 Back")
-        choice = input("> ").strip()
+        clear()
+        box("🔊 AUDIO", [
+            "1. 🔊 Volume +",
+            "2. 🔉 Volume -",
+            "3. 🔇 Mute",
+            "4. 🔊 Unmute",
+            "5. 🎚️ Set Volume",
+            "6. 🎵 Sound Mode",
+            "7. 🎧 Sound Output",
+            "",
+            "0. Back",
+        ])
+        choice = input("\nSelect: ").strip()
         if choice == "0": return
         if choice == "1": run_lgtv(ip, "volume", "up")
         elif choice == "2": run_lgtv(ip, "volume", "down")
@@ -269,65 +314,127 @@ def audio(ip):
         elif choice == "5": run_lgtv(ip, "volume", "set", input("Volume: ").strip())
         elif choice == "6": run_lgtv(ip, "sound-mode", input("Mode: ").strip())
         elif choice == "7": run_lgtv(ip, "sound-output")
-        else: print("❌ Invalid.")
+        else: print("❌ Invalid option."); pause(); continue
         pause()
 
 
 def channels(ip):
     actions = {"1": ("channel", "up"), "2": ("channel", "down"), "3": ("channels",), "4": ("livetv",)}
     while True:
-        print("\n1 Channel+  2 Channel-  3 List Channels  4 Live TV  0 Back")
-        choice = input("> ").strip()
+        clear()
+        box("📺 CHANNELS", [
+            "1. ⬆️ Channel +",
+            "2. ⬇️ Channel -",
+            "3. 📋 List Channels",
+            "4. 📡 Live TV",
+            "",
+            "0. Back",
+        ])
+        choice = input("\nSelect: ").strip()
         if choice == "0": return
         if choice in actions: run_lgtv(ip, *actions[choice]); pause()
-        else: print("❌ Invalid.")
+        else: print("❌ Invalid option."); pause()
 
 
 def inputs(ip):
-    run_lgtv(ip, "inputs")
-    choice = input("\nInput (blank to cancel): ").strip()
-    if choice: run_lgtv(ip, "input", choice)
-    pause()
+    while True:
+        clear()
+        box("🔌 INPUTS", [
+            "1. 📋 List Inputs",
+            "2. 🔌 Switch Input",
+            "",
+            "0. Back",
+        ])
+        choice = input("\nSelect: ").strip()
+        if choice == "0": return
+        if choice == "1": run_lgtv(ip, "inputs"); pause()
+        elif choice == "2":
+            run_lgtv(ip, "inputs")
+            value = input("\nInput: ").strip()
+            if value: run_lgtv(ip, "input", value)
+            pause()
+        else: print("❌ Invalid option."); pause()
 
 
 def media(ip):
     actions = {"1": "play", "2": "pause", "3": "stop", "4": "rewind", "5": "ff", "6": "skip-forward", "7": "skip-back"}
     while True:
-        print("\n1 Play  2 Pause  3 Stop  4 Rewind  5 Fast Forward  6 Skip+  7 Skip-  0 Back")
-        choice = input("> ").strip()
+        clear()
+        box("▶️ MEDIA", [
+            "1. ▶️ Play",
+            "2. ⏸️ Pause",
+            "3. ⏹️ Stop",
+            "4. ⏪ Rewind",
+            "5. ⏩ Fast Forward",
+            "6. ⏭️ Skip Forward",
+            "7. ⏮️ Skip Back",
+            "",
+            "0. Back",
+        ])
+        choice = input("\nSelect: ").strip()
         if choice == "0": return
         if choice in actions: run_lgtv(ip, actions[choice]); pause()
-        else: print("❌ Invalid.")
+        else: print("❌ Invalid option."); pause()
 
 
 def apps(ip):
     while True:
-        print("\n1 List Apps  2 Launch App  3 Current App  0 Back")
-        choice = input("> ").strip()
+        clear()
+        box("📱 APPS", [
+            "1. 📋 List Apps",
+            "2. 🚀 Launch App",
+            "3. 📱 Current App",
+            "",
+            "0. Back",
+        ])
+        choice = input("\nSelect: ").strip()
         if choice == "0": return
         if choice == "1": run_lgtv(ip, "apps")
         elif choice == "2": run_lgtv(ip, "launch", input("App ID/name: ").strip())
         elif choice == "3": run_lgtv(ip, "app")
-        else: print("❌ Invalid.")
+        else: print("❌ Invalid option."); pause(); continue
         pause()
 
 
 def picture(ip):
     commands = {"1": "picture-mode", "2": "backlight", "3": "brightness", "4": "contrast", "5": "trumotion", "6": "energy-saving", "7": "dimming"}
     while True:
-        print("\n1 Picture Mode  2 Backlight  3 Brightness  4 Contrast  5 TruMotion  6 Energy Saving  7 Dimming  0 Back")
-        choice = input("> ").strip()
+        clear()
+        box("🖼️ PICTURE", [
+            "1. 🖼️ Picture Mode",
+            "2. 💡 Backlight",
+            "3. ☀️ Brightness",
+            "4. ◐ Contrast",
+            "5. 🎞️ TruMotion",
+            "6. 🌿 Energy Saving",
+            "7. 🌑 Dimming",
+            "",
+            "0. Back",
+        ])
+        choice = input("\nSelect: ").strip()
         if choice == "0": return
         if choice in commands:
             value = input("Value (blank to query if supported): ").strip()
             run_lgtv(ip, commands[choice], *([value] if value else [])); pause()
-        else: print("❌ Invalid.")
+        else: print("❌ Invalid option."); pause()
 
 
 def tools(ip):
     while True:
-        print("\n1 Screenshot  2 Number  3 Red  4 Green  5 Yellow  6 Blue  7 Open URL  8 Device Info  0 Back")
-        choice = input("> ").strip()
+        clear()
+        box("🛠️ TOOLS", [
+            "1. 📸 Screenshot",
+            "2. 🔢 Number",
+            "3. 🔴 Red",
+            "4. 🟢 Green",
+            "5. 🟡 Yellow",
+            "6. 🔵 Blue",
+            "7. 🌐 Open URL",
+            "8. ℹ️ Device Info",
+            "",
+            "0. Back",
+        ])
+        choice = input("\nSelect: ").strip()
         if choice == "0": return
         if choice == "1": run_lgtv(ip, "screenshot")
         elif choice == "2": run_lgtv(ip, "number", input("Number: ").strip())
@@ -335,7 +442,7 @@ def tools(ip):
             run_lgtv(ip, "color", {"3":"red","4":"green","5":"yellow","6":"blue"}[choice])
         elif choice == "7": run_lgtv(ip, "open-url", input("URL: ").strip())
         elif choice == "8": run_lgtv(ip, "enrich")
-        else: print("❌ Invalid.")
+        else: print("❌ Invalid option."); pause(); continue
         pause()
 
 
