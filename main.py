@@ -2,7 +2,8 @@ import json, os, subprocess
 
 CONFIG = os.path.expanduser("~/.universal_tv_remotes.json")
 BRANDS = ["LG", "Samsung", "Sony", "Philips", "Panasonic", "Toshiba"]
-WIDTH = 60
+# Fixed terminal width for Termux. Keeps the UI from wrapping at the screen edge.
+WIDTH = 83
 
 
 def load_tvs():
@@ -178,7 +179,8 @@ def select_tv():
     clear()
     rows = []
     for i, tv in enumerate(tvs, 1):
-        rows += [f"{i}. 📺 {tv['name']} [{tv.get('brand', '?')}]", f"   {tv['ip']}"]
+        rows += [f"{i}. 📺 {tv['name']} [{tv.get('brand', '?')}]"]
+        rows += [f"   🌐 {tv['ip']}"]
     rows.append("0. ↩️ Back")
     box("📺 SELECT TV", rows)
     choice = input("\nSelect TV: ").strip()
@@ -224,8 +226,20 @@ def control_tv(tv):
 def navigation(ip):
     actions = {"w": "up", "s": "down", "a": "left", "d": "right", "ok": "ok", "b": "back"}
     while True:
-        print("\n🎮 W Up | S Down | A Left | D Right | OK | B Back | H Home | Q Quit")
-        choice = input("> ").lower().strip()
+        clear()
+        box("🎮 NAVIGATION", [
+            "",
+            "              ▲",
+            "             [W]",
+            "",
+            "        [A] [OK] [D]",
+            "",
+            "              ▼",
+            "             [S]",
+            "",
+            "H  🏠 Home    B  ↩️ Back    Q  ↩️ Back",
+        ])
+        choice = input("\nCommand: ").lower().strip()
         if choice == "q": return
         if choice == "h": run_lgtv(ip, "launch", "com.webos.app.home")
         elif choice in actions: run_lgtv(ip, "nav", actions[choice])
